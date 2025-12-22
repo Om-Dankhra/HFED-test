@@ -308,7 +308,6 @@ async function fetchData(province, energyVar, startDate, endDate) {
         return data;
     } catch (error) {
         console.error('API fetch failed:', error);
-        alert('Error loading data. Check console for details.');
         return null;
     } finally {
         showLoading(false);
@@ -611,7 +610,7 @@ function getYAxisLabel(province, energyVar) {
 // Renders paginated data table with navigation
 function renderTable(data) {
     if (!data || data.length === 0) {
-        tableContainer.innerHTML = '<p>No data available.</p>';
+        tableContainer.innerHTML = '<p>No data available for the selected parameters.</p>';
         return;
     }
 
@@ -622,7 +621,7 @@ function renderTable(data) {
 
 function renderTablePage() {
     if (!pagedData || pagedData.length === 0) {
-        tableContainer.innerHTML = '<p>No data available.</p>';
+        tableContainer.innerHTML = '<p>No data available for the selected parameters.</p>';
         return;
     }
 

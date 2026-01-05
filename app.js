@@ -239,20 +239,134 @@ function getPast90Days() {
 
 // Province-specific minimum available dates
 function getMinStartDate(province, energyVar) {
-    const minDates = {
-        "Newfoundland": "2022-09-13",
-        "Prince Edward Island": "2013-11-12",
-        "Nova Scotia": "2022-02-20",
-        "New Brunswick": "2021-03-25",
-        "Quebec": "2021-10-06",
-        "Ontario": "2002-05-01",
-        "Alberta": "2023-02-07",
-        "Saskatchewan": "2024-09-29",
-        "British Columbia": "2001-04-01",
-        "Yukon": "2024-10-09"
-    };
-    
-    return new Date(minDates[province] || "2001-01-01");
+    // 1) Province-level default
+    let minStartDate;
+
+    switch (province) {
+        case "Newfoundland":
+            minStartDate = new Date("2022-09-13");
+            break;
+        case "Prince Edward Island":
+            minStartDate = new Date("2012-11-13");
+            break;
+        case "Nova Scotia":
+            minStartDate = new Date("2022-02-20");
+            break;
+        case "New Brunswick":
+            minStartDate = new Date("2016-01-01");
+            break;
+        case "Quebec":
+            minStartDate = new Date("2016-01-01");
+            break;
+        case "Ontario":
+            minStartDate = new Date("2002-05-01");
+            break;
+        case "Alberta":
+            minStartDate = new Date("2023-02-07");
+            break;
+        case "Saskatchewan":
+            minStartDate = new Date("2024-09-29");
+            break;
+        case "British Columbia":
+            minStartDate = new Date("2001-04-01");
+            break;
+        case "Yukon":
+            minStartDate = new Date("2024-10-09");
+            break;
+        default:
+            minStartDate = new Date("2001-01-01"); // fallback
+    }
+
+    // 2) Variable-specific overrides
+
+    // Prince Edward Island
+    if (province === "Prince Edward Island" && energyVar === "IMPORT_CABLES") {
+        minStartDate = new Date("2018-10-30");
+    }
+
+    // Nova Scotia
+    else if (province === "Nova Scotia" && energyVar === "WIND") {
+        minStartDate = new Date("2022-12-07");
+    }
+
+    // New Brunswick
+    else if (province === "New Brunswick") {
+        if (["RM_10", "RM_30"].includes(energyVar)) {
+            minStartDate = new Date("2021-03-25");
+        } else if (energyVar === "SRM_10") {
+            minStartDate = new Date("2024-08-19");
+        }
+    }
+
+    // Quebec
+    else if (province === "Quebec") {
+        if (energyVar === "DEMAND") {
+            minStartDate = new Date("2019-01-01");
+        } else if (
+            ["HYDRO", "OTHER", "SOLAR", "THERMAL", "TOTAL_PRODUCTION", "WIND"]
+                .includes(energyVar)
+        ) {
+            minStartDate = new Date("2021-10-05");
+        } else if (
+            ["EXPORT", "EXPORT_TOTAL", "IMPORT_GAS", "IMPORT_HYDRO", "IMPORT_NUCLEAR", "IMPORT_TOTAL", "IMPORT_UNKNOWN", "IMPORT_WIND"]
+                .includes(energyVar)
+        ) {
+            minStartDate = new Date("2025-04-01");
+        }
+    }
+
+    // Ontario
+    else if (province === "Ontario") {
+        if (["RESIDENTIAL_RETAILER", "SGS_50KW_TOU"].includes(energyVar)) {
+            minStartDate = new Date("2018-01-01");
+        } else if (
+            ["DIRECT_CONNECT", "ELEC_POWER", "IRON_STEEL", "LDC", "MANU_FACTR", "METAL_ORE", "MOTOR_VEHICLE", "OTHER_INDSTR", "PETRO_COAL", "PULP_PAPER"]
+                .includes(energyVar)
+        ) {
+            minStartDate = new Date("2019-01-01");
+        } else if (energyVar === "SGS_50KW_RETAILER") {
+            minStartDate = new Date("2019-03-01");
+        } else if (
+            ["BIOFUEL_CAPABILITY", "BIOFUEL_OUTPUT","GAS_CAPABILITY", "GAS_OUTPUT","HYDRO_CAPABILITY", "HYDRO_OUTPUT","NUCLEAR_CAPABILITY", "NUCLEAR_OUTPUT", "SOLAR_AVAILABLE_CAPACITY",
+             "SOLAR_CAPABILITY", "SOLAR_OUTPUT", "WIND_AVAILABLE_CAPACITY", "WIND_CAPABILITY", "WIND_OUTPUT"]
+                .includes(energyVar)
+        ) {
+            minStartDate = new Date("2019-05-01");
+        } else if (energyVar === "RESIDENTIAL_TIERED") {
+            minStartDate = new Date("2020-11-01");
+        } else if (energyVar === "RESIDENTIAL_TOU") {
+            minStartDate = new Date("2023-09-22");
+        } else if (energyVar === "SGS_50KW_TIERED") {
+            minStartDate = new Date("2023-10-18");
+        } else if (energyVar === "SGS_50KW_ULO") {
+            minStartDate = new Date("2024-05-01");
+        } else if (energyVar === "RESIDENTIAL_ULO") {
+            minStartDate = new Date("2024-08-17");
+        } else if (["EXPORT", "FLOW", "IMPORT"].includes(energyVar)) {
+            minStartDate = new Date("2024-11-19");
+        }
+    }
+
+    // Alberta
+    else if (province === "Alberta") {
+        if (energyVar === "SYSTEM_MARGINAL_PRICE") {
+            minStartDate = new Date("2024-05-06");
+        } else if (energyVar === "POOL_PRICE") {
+            minStartDate = new Date("2024-05-07");
+        } else if (
+            ["COGENERATION", "COMBINED_CYCLE", "GAS_FIRED_STEAM", "SIMPLE_CYCLE"]
+                .includes(energyVar)
+        ) {
+            minStartDate = new Date("2025-01-04");
+        }
+    }
+
+    // British Columbia
+    else if (province === "British Columbia" && energyVar === "NSI") {
+        minStartDate = new Date("2007-01-01");
+    }
+
+    return minStartDate;
 }
 
 // Resizes Plotly chart when container changes size
@@ -535,12 +649,15 @@ function updateDateInputs() {
     const province = provinceSelect.value;
     const energyVar = energyVarSelect.value;
     const { startDate, endDate } = getPast90Days();
+
     const minDate = getMinStartDate(province, energyVar);
-    
-    startDateInput.value = formatDate(startDate > minDate ? startDate : minDate);
+    const effectiveStart = startDate > minDate ? startDate : minDate;
+
+    startDateInput.value = formatDate(effectiveStart);
     endDateInput.value = formatDate(endDate);
     startDateInput.min = formatDate(minDate);
-    endDateInput.max = formatDate(new Date());
+    startDateInput.max = formatDate(new Date()); // max start date
+    endDateInput.max = formatDate(new Date()); // max end date
 }
 
 // =============================================================================
@@ -560,12 +677,22 @@ function renderChart(data, province, energyVar) {
     const yData = data.map(row => parseFloat(row.OBS_VALUE));
     
     const trace = {
-        x: xData,
-        y: yData,
-        type: 'scatter',
-        mode: 'lines',
-        name: energyVarLabel,
-        line: { color: '#036BDB', width: 2 }
+    x: xData,
+    y: yData,
+    type: 'scatter',
+    mode: 'lines',
+    name: energyVarLabel,
+    line: { color: '#036BDB', width: 2 },
+    hoverlabel: {
+        bgcolor: '#036BDB',   // same as line.color
+        bordercolor: '#333',
+        font: { color: '#ffffff' }
+    },
+    hovertemplate:
+        '<b>%{fullData.name}</b><br>' +
+        'Observation value: %{y}<br>' +
+        'Date and time: %{x}' +
+        '<extra></extra>'
     };
     
     const layout = {
@@ -593,7 +720,7 @@ function renderChart(data, province, energyVar) {
 // Get Y-axis label
 function getYAxisLabel(province, energyVar) {
     if (province === "Prince Edward Island" && energyVar === "WIND_PERCENT") {
-        return "Percent %";
+        return "Percent (%)";
     }
     if (province === "New Brunswick") {
         return "MWh";

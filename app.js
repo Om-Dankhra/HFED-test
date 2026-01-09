@@ -932,18 +932,17 @@ let cachedFullData = [];  // Store full data for current province & energy var
 
 // Main data loading function - handles caching, restrictions, filtering
 async function loadData() {
+    // Clear previous messages every time
+    chartContainer.innerHTML = '';
+    tableContainer.innerHTML = '';
+
     const province = provinceSelect.value;
     const energyVar = energyVarSelect.value;
     const activeTab = document.querySelector('.tab-btn.active').dataset.tab
 
     // BLOCK LARGE ONTARIO SMARTMETER DATASETS
     // --- RESTRICTION CHECK ---
-    const restrictedVars = [
-        "RESIDENTIAL_RETAILER", "RESIDENTIAL_TIERED", 
-        "RESIDENTIAL_TOU", "RESIDENTIAL_ULO",
-        "SGS_50KW_RETAILER", "SGS_50KW_TIERED", 
-        "SGS_50KW_TOU", "SGS_50KW_ULO"
-    ];
+    const restrictedVars = ["RESIDENTIAL_RETAILER", "RESIDENTIAL_TIERED", "RESIDENTIAL_TOU", "RESIDENTIAL_ULO", "SGS_50KW_RETAILER", "SGS_50KW_TIERED", "SGS_50KW_TOU", "SGS_50KW_ULO"];
 
     if (province === "Ontario" && 
         restrictedVars.includes(energyVar) && 
@@ -951,9 +950,12 @@ async function loadData() {
         
         const message = '<p style="padding: 20px; color: #666;">Due to the large file size, this variable is not available for preview. Please download the file or access data using the API (see API tab for more information).</p>';
         
-        chartContainer.innerHTML = message;
-        tableContainer.innerHTML = message; // Hide table too
-        return; // STOP execution here
+        if (activeTab === 'chart') {
+      chartContainer.innerHTML = message;
+    } else if (activeTab === 'table') {
+      tableContainer.innerHTML = message;
+    }
+    return;
     }
     // --- END RESTRICTION CHECK ---
 

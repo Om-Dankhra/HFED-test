@@ -665,6 +665,7 @@ function updateDateInputs() {
 // =============================================================================
 // Renders interactive Plotly time series chart
 function renderChart(data, province, energyVar) {
+    chartContainer.innerHTML = '';
     if (!data || data.length === 0) {
         chartContainer.innerHTML = '<p>No data available for the selected parameters.</p>';
         return;
@@ -736,6 +737,7 @@ function getYAxisLabel(province, energyVar) {
 
 // Renders paginated data table with navigation
 function renderTable(data) {
+    tableContainer.innerHTML = '';
     if (!data || data.length === 0) {
         tableContainer.innerHTML = '<p>No data available for the selected parameters.</p>';
         return;
@@ -747,6 +749,7 @@ function renderTable(data) {
 }
 
 function renderTablePage() {
+    tableContainer.innerHTML = '';
     if (!pagedData || pagedData.length === 0) {
         tableContainer.innerHTML = '<p>No data available for the selected parameters.</p>';
         return;
@@ -917,10 +920,21 @@ function switchTab(tabName) {
     document.getElementById(`${tabName}-tab`).classList.add('active');
     
     if (tabName === 'chart') {
+        if (isRestricted) {
+        const message = `<p style="padding: 20px; color: #666;">Due to the large file size, this variable is not available for preview. Please download the file or access data using the API (see API tab for more information).</p>`;
+        chartContainer.innerHTML = message;
+        } else {
+        filterAndRenderCurrentData();  // Re-render chart if data exists
+        }
         resizeChart();
-    }
-
-    if (tabName === 'api') {
+    } else if (tabName === 'table') {
+        if (isRestricted) {
+        const message = `<p style="padding: 20px; color: #666;">Due to the large file size, this variable is not available for preview. Please download the file or access data using the API (see API tab for more information).</p>`;
+        tableContainer.innerHTML = message;
+        } else {
+        renderTable(currentData);  // Re-render table if data exists
+        }
+    } else if (tabName === 'api') {
         updateApiUrls();
     }
 }
@@ -929,33 +943,31 @@ function switchTab(tabName) {
 // ## MAIN DATA LOADING WORKFLOW
 // =============================================================================
 let cachedFullData = [];  // Store full data for current province & energy var
+let isRestricted = false;  // Track if current selection is restricted
 
 // Main data loading function - handles caching, restrictions, filtering
 async function loadData() {
-    // Clear previous messages every time
-    chartContainer.innerHTML = '';
-    tableContainer.innerHTML = '';
-
     const province = provinceSelect.value;
     const energyVar = energyVarSelect.value;
     const activeTab = document.querySelector('.tab-btn.active').dataset.tab
 
     // BLOCK LARGE ONTARIO SMARTMETER DATASETS
     // --- RESTRICTION CHECK ---
-    const restrictedVars = ["RESIDENTIAL_RETAILER", "RESIDENTIAL_TIERED", "RESIDENTIAL_TOU", "RESIDENTIAL_ULO", "SGS_50KW_RETAILER", "SGS_50KW_TIERED", "SGS_50KW_TOU", "SGS_50KW_ULO"];
+    const restrictedVars = [
+        "RESIDENTIAL_RETAILER", "RESIDENTIAL_TIERED", 
+        "RESIDENTIAL_TOU", "RESIDENTIAL_ULO",
+        "SGS_50KW_RETAILER", "SGS_50KW_TIERED", 
+        "SGS_50KW_TOU", "SGS_50KW_ULO"
+    ];
 
-    if (province === "Ontario" && 
-        restrictedVars.includes(energyVar) && 
-        activeTab !== "api") {
+    isRestricted = (province === 'Ontario' && restrictedVars.includes(energyVar));
+    if (isRestricted && activeTab !== 'api') {
         
         const message = '<p style="padding: 20px; color: #666;">Due to the large file size, this variable is not available for preview. Please download the file or access data using the API (see API tab for more information).</p>';
         
-        if (activeTab === 'chart') {
-      chartContainer.innerHTML = message;
-    } else if (activeTab === 'table') {
-      tableContainer.innerHTML = message;
-    }
-    return;
+        chartContainer.innerHTML = message;
+        tableContainer.innerHTML = message; // Hide table too
+        return; // STOP execution here
     }
     // --- END RESTRICTION CHECK ---
 

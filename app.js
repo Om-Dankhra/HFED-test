@@ -665,6 +665,7 @@ function updateDateInputs() {
 // =============================================================================
 // Renders interactive Plotly time series chart
 function renderChart(data, province, energyVar) {
+    // Clear container FIRST, no early message
     chartContainer.innerHTML = '';
     if (!data || data.length === 0) {
         chartContainer.innerHTML = '<p>No data available for the selected parameters.</p>';
@@ -737,7 +738,6 @@ function getYAxisLabel(province, energyVar) {
 
 // Renders paginated data table with navigation
 function renderTable(data) {
-    tableContainer.innerHTML = '';
     if (!data || data.length === 0) {
         tableContainer.innerHTML = '<p>No data available for the selected parameters.</p>';
         return;
@@ -749,7 +749,6 @@ function renderTable(data) {
 }
 
 function renderTablePage() {
-    tableContainer.innerHTML = '';
     if (!pagedData || pagedData.length === 0) {
         tableContainer.innerHTML = '<p>No data available for the selected parameters.</p>';
         return;
@@ -919,21 +918,8 @@ function switchTab(tabName) {
     document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
     document.getElementById(`${tabName}-tab`).classList.add('active');
     
-    if (tabName === 'chart') {
-        if (isRestricted) {
-        const message = `<p style="padding: 20px; color: #666;">Due to the large file size, this variable is not available for preview. Please download the file or access data using the API (see API tab for more information).</p>`;
-        chartContainer.innerHTML = message;
-        } else {
-        filterAndRenderCurrentData();  // Re-render chart if data exists
-        }
+        if (tabName === 'chart') {
         resizeChart();
-    } else if (tabName === 'table') {
-        if (isRestricted) {
-        const message = `<p style="padding: 20px; color: #666;">Due to the large file size, this variable is not available for preview. Please download the file or access data using the API (see API tab for more information).</p>`;
-        tableContainer.innerHTML = message;
-        } else {
-        renderTable(currentData);  // Re-render table if data exists
-        }
     } else if (tabName === 'api') {
         updateApiUrls();
     }

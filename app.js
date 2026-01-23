@@ -10,6 +10,7 @@ const BASE_URL_SUFFIX = "&dimensionAtObservation=AllDimensions";
 let pagedData = [];           // Current table data for pagination
 let currentPage = 1;          // Active table page
 const rowsPerPage = 10;       // Rows per table page
+const formatter = new Intl.NumberFormat('en-CA');
 
 // ## PROVINCE MAPPINGS
 // Dataflow IDs for each province (required for API queries)
@@ -212,6 +213,23 @@ const tableContainer = document.getElementById('table-container');
 const apiUrlsContainer = document.getElementById('api-urls');
 const loadingSpinner = document.getElementById('loading-spinner');
 
+let startDatePicker, endDatePicker;
+
+// Init Flatpickr after DOM ready
+function initDatePickers() {
+    startDatePicker = flatpickr("#start-date", {
+        onChange: function(selectedDates, dateStr) {
+            startDateInput.value = dateStr;
+        }
+    });
+    
+    endDatePicker = flatpickr("#end-date", {
+        onChange: function(selectedDates, dateStr) {
+            endDateInput.value = dateStr;
+        }
+    });
+}
+
 // =============================================================================
 // ## UTILITY/HELPER FUNCTIONS
 // =============================================================================
@@ -234,7 +252,7 @@ function getPast90Days() {
     const endDate = new Date();
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - 90);
-    return { startDate, endDate };
+    return [startDate, endDate];
 }
 
 // Province-specific minimum available dates
@@ -448,15 +466,49 @@ function applyProvincePostProcessing(data, province, energyVar) {
                                (row.COUNTERPART_AREA || "");
     });
 
-    // 3. Fix UNIT_MEASURE inconsistencies
+    // 3. UNIT_MEASURE fixes
+    // PEI: WIND_PERCENT -> replace "MW" with "%"
+    if (province === "Prince Edward Island" && energyVar === "WIND_PERCENT") {
+        data.forEach(row => {
+            if (row.UNIT_MEASURE) {
+                row.UNIT_MEASURE = row.UNIT_MEASURE.replace(/MW/g, "%");
+            }
+        });
+    }
+
+
+    // New Brunswick: all "MW" -> "MWh"
+    if (province === "New Brunswick") {
+        data.forEach(row => {
+            if (row.UNIT_MEASURE) {
+                row.UNIT_MEASURE = row.UNIT_MEASURE.replace(/MW/g, "MWh");
+            }
+        });
+    }
+   
+    const numericCol = "OBS_VALUE";
+
+    // Convert/format numbers with locale thousands separator
     data.forEach(row => {
-        // PEI: WIND_PERCENT should be % not MW
-        if (province === "Prince Edward Island" && energyVar === "WIND_PERCENT" && row.UNIT_MEASURE === "MW") {
-            row.UNIT_MEASURE = "%";
+        if (row[numericCol] !== undefined && row[numericCol] !== null && row[numericCol] !== "") {
+            const num = Number(row[numericCol]);
+            if (!Number.isNaN(num)) {
+                row[numericCol] = num.toLocaleString("en-CA"); // e.g. "12,345.67"
+            }
         }
-        // New Brunswick: All values should be MWh despite API saying MW
-        if (province === "New Brunswick" && row.UNIT_MEASURE === "MW") {
-            row.UNIT_MEASURE = "MWh";
+    });
+
+    // Right-align numbers: pad to max width
+    let maxLen = 0;
+    data.forEach(row => {
+        if (row[numericCol] != null) {
+            maxLen = Math.max(maxLen, String(row[numericCol]).length);
+        }
+    });
+    data.forEach(row => {
+        if (row[numericCol] != null) {
+            const v = String(row[numericCol]);
+            row[numericCol] = v.padStart(maxLen, " ");
         }
     });
 
@@ -648,7 +700,7 @@ function updateCounterpartAreaSelect() {
 function updateDateInputs() {
     const province = provinceSelect.value;
     const energyVar = energyVarSelect.value;
-    const { startDate, endDate } = getPast90Days();
+    const [startDate, endDate] = getPast90Days();
 
     const minDate = getMinStartDate(province, energyVar);
     const effectiveStart = startDate > minDate ? startDate : minDate;
@@ -658,6 +710,33 @@ function updateDateInputs() {
     startDateInput.min = formatDate(minDate);
     startDateInput.max = formatDate(new Date()); // max start date
     endDateInput.max = formatDate(new Date()); // max end date
+}
+
+function updateFlatpickrMinDate() {
+    const province = provinceSelect.value;
+    const energyVar = energyVarSelect.value;
+    const minDate = getMinStartDate(province, energyVar);
+    const maxDate = new Date();  // Today
+    
+    const [start90, end90] = getPast90Days();
+    const effectiveStart = start90 < minDate ? minDate : start90;
+    
+    // SET CONSTRAINTS FIRST
+    if (startDatePicker) {
+        startDatePicker.set('minDate', minDate);
+        startDatePicker.set('maxDate', maxDate);
+        startDatePicker.setDate(effectiveStart);
+    }
+    
+    if (endDatePicker) {
+        endDatePicker.set('minDate', minDate);
+        endDatePicker.set('maxDate', maxDate);
+        endDatePicker.setDate(end90);
+    }
+    
+    // Sync inputs
+    startDateInput.value = formatDate(effectiveStart);
+    endDateInput.value = formatDate(end90);
 }
 
 // =============================================================================
@@ -676,7 +755,7 @@ function renderChart(data, province, energyVar) {
     
     // Prepare data for Plotly
     const xData = data.map(row => row.DATETIME_LOCAL || row.TIME_PERIOD);
-    const yData = data.map(row => parseFloat(row.OBS_VALUE));
+    const yData = data.map(row => parseFloat(row.OBS_VALUE.replace(/,/g, '')));
     
     const trace = {
     x: xData,
@@ -712,8 +791,7 @@ function renderChart(data, province, energyVar) {
     
     const config = {
         responsive: true,
-        displayModeBar: true,
-        modeBarButtonsToRemove: ['lasso2d', 'select2d']
+        displayModeBar: false,
     };
     
     Plotly.newPlot('chart-container', [trace], layout, config);
@@ -756,16 +834,7 @@ function renderTablePage() {
 
     const headers = Object.keys(pagedData[0]);
 
-    const displayHeaders = [
-        'DATAFLOW',
-        'REF_AREA',
-        'COUNTERPART_AREA',
-        'ENERGY_FLOWS',
-        'TIME_PERIOD',
-        'OBS_VALUE',
-        'DATETIME_LOCAL',
-        'UNIT_MEASURE'
-    ];
+    const displayHeaders = ['DATAFLOW', 'REF_AREA', 'COUNTERPART_AREA', 'ENERGY_FLOWS', 'TIME_PERIOD', 'OBS_VALUE', 'DATETIME_LOCAL', 'UNIT_MEASURE'];
 
     const headerLabels = {
         DATAFLOW: 'Data flow',
@@ -808,7 +877,7 @@ function renderTablePage() {
     // footer like DataTables: "Showing 1 to 10 of 2,863 entries  Prev 1 2 3 ... Next"
     html += `<div class="table-footer">
         <div class="table-info">
-            Showing ${startIdx + 1} to ${endIdx} of ${totalRows} entries
+            Showing ${formatter.format(startIdx + 1)} to ${formatter.format(endIdx)} of ${formatter.format(totalRows)} entries
         </div>
         <div class="table-pagination">
             <button class="page-btn" data-page="prev" ${currentPage === 1 ? 'disabled' : ''}>Previous</button>
@@ -832,7 +901,6 @@ function renderTablePage() {
 }
 
 function buildPageButtons(current, total) {
-    // simple: show first, last, current, neighbors with ellipsis
     const pages = [];
     for (let i = 1; i <= total; i++) {
         if (i === 1 || i === total || Math.abs(i - current) <= 1) {
@@ -846,10 +914,10 @@ function buildPageButtons(current, total) {
             return `<span class="page-ellipsis">…</span>`;
         }
         const active = p === current ? 'active' : '';
-        return `<button class="page-btn ${active}" data-page="${p}">${p}</button>`;
+        const displayPage = formatter.format(p);  // Format for display
+        return `<button class="page-btn ${active}" data-page="${p}">${displayPage}</button>`;
     }).join('');
 }
-
 
 // Update API URLs display
 function updateApiUrls() {
@@ -878,32 +946,76 @@ Example (CSV): ${csvUrlDate}`;
     apiUrlsContainer.textContent = infoText;
 }
 
-
-
 // Download data as CSV
-function downloadData() {
-    if (!currentData || currentData.length === 0) {
-        alert('No data to download');
-        return;
-    }
-    
-    const province = provinceSelect.value;
-    const energyVar = energyVarSelect.value;
-    
-    const headers = Object.keys(currentData[0]);
-    let csv = headers.join(',') + '\n';
-    
-    currentData.forEach(row => {
-        csv += headers.map(header => row[header] || '').join(',') + '\n';
+// Build *download* dataset from live UI state, ignoring any stale currentData
+async function downloadData() {
+  const province = provinceSelect.value;
+  const energyVar = energyVarSelect.value;
+  const startDate = new Date(startDateInput.value);
+  const endDate = new Date(endDateInput.value);
+
+  if (!startDateInput.value || !endDateInput.value) {
+    alert('Please select a valid start and end date before downloading.');
+    return;
+  }
+
+  const url = buildApiUrl(province, energyVar, startDate, endDate);
+  try {
+    showLoading(true);
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`Download request failed with status ${response.status}`);
+    const csvText = await response.text();
+    let data = parseCSV(csvText);
+
+    // Step 1: Apply province-specific post-processing (as in fetchData)
+    data = applyProvincePostProcessing(data, province, energyVar);
+
+    // Step 2: Define display headers and explicit key mapping
+    const displayHeaders = ['Data flow', 'Reference area', 'Counterpart area', 'Energy flow', 'Time period UTC', 'Observation value', 'Time period local', 'Unit measure'];
+
+    const headersKey = {
+    'Data flow': 'DATAFLOW',
+    'Reference area': 'REF_AREA',
+    'Counterpart area': 'COUNTERPART_AREA',
+    'Energy flow': 'ENERGY_FLOWS',
+    'Time period UTC': 'TIME_PERIOD',
+    'Observation value': 'OBS_VALUE',
+    'Time period local': 'DATETIME_LOCAL',
+    'Unit measure': 'UNIT_MEASURE'
+    };
+
+    // Step 3: Build CSV
+    let csv = displayHeaders.join(',') + '\n';
+
+    data.forEach(row => {
+    const line = displayHeaders.map(header => {
+        const key = headersKey[header];
+        let value = row[key] != null ? String(row[key]) : '';
+        if (value.includes(',') || value.includes('"') || value.includes('\n') || value.includes(' ')) {
+        value = '"' + value.replace(/"/g, '""') + '"';
+        }
+        return value;
+    }).join(',');
+    csv += line + '\n';
     });
-    
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
+
+    // Step 4: Trigger download
+    const fileName = `HFED_${province}_${energyVar}_data.csv`;
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const urlObj = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url;
-    a.download = `HFED_${province}_${energyVar}_data.csv`;
+    a.href = urlObj;
+    a.download = fileName;
+    document.body.appendChild(a);
     a.click();
-    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(urlObj);
+  } catch (err) {
+    console.error('Download failed:', err);
+    alert('Download failed. Please try again.');
+  } finally {
+    showLoading(false);
+  }
 }
 
 // Tab switching
@@ -918,7 +1030,7 @@ function switchTab(tabName) {
     document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
     document.getElementById(`${tabName}-tab`).classList.add('active');
     
-        if (tabName === 'chart') {
+    if (tabName === 'chart') {
         resizeChart();
     } else if (tabName === 'api') {
         updateApiUrls();
@@ -1001,16 +1113,20 @@ function filterAndRenderCurrentData() {
 counterpartAreaSelect.addEventListener('change', filterAndRenderCurrentData);
 
 // Event listeners
-provinceSelect.addEventListener('change', () => {
+provinceSelect.addEventListener('change', function() {
     updateEnergyVarSelect();
     updateDateInputs();
     updateCounterpartAreaSelect();
+    updateFlatpickrMinDate();
+    updateApiUrls();
     loadData();
 });
 
-energyVarSelect.addEventListener('change', () => {
+energyVarSelect.addEventListener('change', function() {
     updateDateInputs();
     updateCounterpartAreaSelect();
+    updateFlatpickrMinDate();
+    updateApiUrls();
     loadData();
 });
 
@@ -1026,8 +1142,10 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
 });
 
 // Initialize on page load
-document.addEventListener('DOMContentLoaded', () => {
-    updateEnergyVarSelect();
-    updateDateInputs();
-    loadData();
+document.addEventListener('DOMContentLoaded', function() {
+    updateEnergyVarSelect();     // Selects first province/var
+    updateDateInputs();          // Computes minDate
+    initDatePickers();           // Creates pickers
+    updateFlatpickrMinDate();    // Sets dates + constraints
+    loadData();                  // Loads with dates
 });

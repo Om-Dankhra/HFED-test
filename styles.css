@@ -19,6 +19,48 @@ body {
     box-shadow: 0 2px 8px rgba(0,0,0,0.1);
 }
 
+.flatpickr-wrapper {
+  position: relative;
+  height: 38px;
+}
+
+.flatpickr-input {
+  width: 100%;
+  height: 38px;
+  padding: 8px 36px 8px 12px; /* room for icon on the right */
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+  background: white;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+/* Year arrows always visible */
+.flatpickr-calendar .flatpickr-current-month .numInputWrapper .arrowUp,
+.flatpickr-calendar .flatpickr-current-month .numInputWrapper .arrowDown {
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+/* calendar icon inside the input */
+.flatpickr-icon {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  font-size: 16px;
+  color: #666;
+}
+
+/* hover / focus to signal interactivity */
+.flatpickr-wrapper:hover .flatpickr-input,
+.flatpickr-input:focus {
+  border-color: #376ba1;
+  box-shadow: 0 0 0 2px rgba(55, 107, 161, 0.15);
+}
+
 .controls-row {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));

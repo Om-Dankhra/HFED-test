@@ -168,6 +168,11 @@ table th {
     color: #333;
 }
 
+/* Right-align numeric OBSVALUE column */
+table td:nth-child(6) {
+    text-align: right !important;
+}
+
 table tr:hover {
     background-color: #f8f9fa;
 }

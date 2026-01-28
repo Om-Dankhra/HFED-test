@@ -602,8 +602,12 @@ function parseCSV(csvText) {
 
 // Show/hide loading spinner
 function showLoading(show) {
-    loadingSpinner.style.display = show ? 'block' : 'none';
-    chartContainer.style.opacity = show ? '0.5' : '1';
+  loadingSpinner.style.display = show ? 'block' : 'none';
+
+  // Dim containers while showing loader
+  chartContainer.style.opacity = show ? 0.5 : 1;
+  tableContainer.style.opacity = show ? 0.5 : 1;
+  apiUrlsContainer.style.opacity = show ? 0.5 : 1;
 }
 
 // Updates energy variable dropdown with province-specific options

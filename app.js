@@ -862,7 +862,6 @@ function renderChart(data, province, energyVar) {
         yaxis: {
             title: getYAxisLabel(province, energyVar)
         },
-        margin: { t: 50, r: 40, l: 60, b: 80 },
         hovermode: 'closest'
     };
     
@@ -932,43 +931,63 @@ function renderTablePage() {
     const endIdx = Math.min(startIdx + rowsPerPage, totalRows);
     const pageRows = pagedData.slice(startIdx, endIdx);
 
-    let html = '<table><thead><tr>';
+    // Build table with WET-BOEW classes
+    let html = '<table class="table table-striped table-hover">';
+    html += '<caption class="wb-inv">Energy data table for selected parameters</caption>';
+    html += '<thead><tr>';
+    
     displayHeaders.forEach(header => {
         if (headers.includes(header)) {
-            html += `<th>${headerLabels[header] || header}</th>`;
+            const scope = 'scope="col"';
+            html += `<th ${scope}>${headerLabels[header] || header}</th>`;
         }
     });
     html += '</tr></thead><tbody>';
 
     pageRows.forEach(row => {
         html += '<tr>';
-        displayHeaders.forEach(header => {
+        displayHeaders.forEach((header, index) => {
             if (headers.includes(header)) {
-                html += `<td>${row[header] ?? ''}</td>`;
+                const value = row[header] ?? '-';
+                // Right-align numeric observation values
+                const className = header === 'OBS_VALUE' ? ' class="text-right"' : '';
+                html += `<td${className}>${value}</td>`;
             }
         });
         html += '</tr>';
     });
     html += '</tbody></table>';
 
-    // footer like DataTables: "Showing 1 to 10 of 2,863 entries  Prev 1 2 3 ... Next"
+    // WET-BOEW pagination
     html += `<div class="table-footer">
         <div class="table-info">
             Showing ${formatter.format(startIdx + 1)} to ${formatter.format(endIdx)} of ${formatter.format(totalRows)} entries
         </div>
-        <div class="table-pagination">
-            <button class="page-btn" data-page="prev" ${currentPage === 1 ? 'disabled' : ''}>Previous</button>
+        <ul class="pagination">
+            <li class="${currentPage === 1 ? 'disabled' : ''}">
+                <a href="#" data-page="prev" rel="prev">
+                    <span class="wb-inv"></span>Previous
+                </a>
+            </li>
             ${buildPageButtons(currentPage, totalPages)}
-            <button class="page-btn" data-page="next" ${currentPage === totalPages ? 'disabled' : ''}>Next</button>
-        </div>
+            <li class="${currentPage === totalPages ? 'disabled' : ''}">
+                <a href="#" data-page="next" rel="next">
+                    Next<span class="wb-inv"></span>
+                </a>
+            </li>
+        </ul>
     </div>`;
 
     tableContainer.innerHTML = html;
 
-    // attach events for buttons
-    tableContainer.querySelectorAll('.page-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const target = btn.dataset.page;
+    // Attach events
+    tableContainer.querySelectorAll('.pagination a').forEach(link => {
+        link.addEventListener('click', (e) => {
+            e.preventDefault();
+            const li = link.parentElement;
+            if (li.classList.contains('disabled') || li.classList.contains('active')) return;
+            
+            const target = link.dataset.page;
             if (target === 'prev' && currentPage > 1) currentPage--;
             else if (target === 'next' && currentPage < totalPages) currentPage++;
             else if (!isNaN(parseInt(target))) currentPage = parseInt(target);
@@ -986,13 +1005,17 @@ function buildPageButtons(current, total) {
             pages.push('...');
         }
     }
+    
     return pages.map(p => {
         if (p === '...') {
-            return `<span class="page-ellipsis">…</span>`;
+            return `<li class="disabled"><span>…</span></li>`;
         }
-        const active = p === current ? 'active' : '';
-        const displayPage = formatter.format(p);  // Format for display
-        return `<button class="page-btn ${active}" data-page="${p}">${displayPage}</button>`;
+        const activeClass = p === current ? ' class="active"' : '';
+        const displayPage = formatter.format(p);
+        const screenReaderText = p === current ? 
+            `<span class="wb-inv"></span>${displayPage}` :
+            `<span class="wb-inv"></span>${displayPage}`;
+        return `<li${activeClass}><a href="#" data-page="${p}">${screenReaderText}</a></li>`;
     }).join('');
 }
 
@@ -1096,23 +1119,24 @@ async function downloadData() {
 }
 
 // Tab switching
-function switchTab(tabName) {
-    document.querySelectorAll('.tab-btn').forEach(btn => {
-        btn.classList.remove('active');
+// Ensure only one tab is open at a time
+document.querySelectorAll('.wb-tabs details').forEach(tab => {
+    tab.addEventListener('toggle', function() {
+        if (this.open) {
+            // Close all other tabs
+            document.querySelectorAll('.wb-tabs details').forEach(otherTab => {
+                if (otherTab !== this) otherTab.open = false;
+            });
+            
+            // Handle tab-specific updates
+            if (this.id === 'chart-tab') {
+                setTimeout(() => resizeChart(), 100);
+            } else if (this.id === 'api-tab') {
+                updateApiUrls();
+            }
+        }
     });
-    document.querySelectorAll('.tab-pane').forEach(pane => {
-        pane.classList.remove('active');
-    });
-    
-    document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
-    document.getElementById(`${tabName}-tab`).classList.add('active');
-    
-    if (tabName === 'chart') {
-        resizeChart();
-    } else if (tabName === 'api') {
-        updateApiUrls();
-    }
-}
+});
 
 // =============================================================================
 // ## MAIN DATA LOADING WORKFLOW
@@ -1124,7 +1148,6 @@ let isRestricted = false;  // Track if current selection is restricted
 async function loadData() {
     const province = provinceSelect.value;
     const energyVar = energyVarSelect.value;
-    const activeTab = document.querySelector('.tab-btn.active').dataset.tab
 
     // BLOCK LARGE ONTARIO SMARTMETER DATASETS
     // --- RESTRICTION CHECK ---

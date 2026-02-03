@@ -1159,7 +1159,9 @@ async function loadData() {
     ];
 
     isRestricted = (province === 'Ontario' && restrictedVars.includes(energyVar));
-    if (isRestricted && activeTab !== 'api') {
+    if (isRestricted) {
+        const apiTab = document.getElementById('api-tab');
+        const isApiTabOpen = apiTab && apiTab.open;
         
         const message = '<p style="padding: 20px; color: #666;">Due to the large file size, this variable is not available for preview. Please download the file or access data using the API (see API tab for more information).</p>';
         

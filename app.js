@@ -451,13 +451,15 @@ function getMinStartDate(province, energyVar) {
     return minStartDate;
 }
 
-// Resizes Plotly chart when container changes size
+// Resizes chart when container changes size
 function resizeChart() {
-    const el = document.getElementById('chart-container');
-    if (el && el.data && el.layout) {
-        Plotly.Plots.resize(el);
+    const province = provinceSelect.value;
+    const energyVar = energyVarSelect.value;
+    if (currentData && province && energyVar) {
+        renderChart(currentData, province, energyVar);
     }
 }
+
 
 // =============================================================================
 // ## API URL BUILDER
@@ -812,65 +814,175 @@ function updateFlatpickrMinDate() {
     startDateInput.value = formatDate(effectiveStart);
     endDateInput.value = formatDate(end90);
 
-    // Refresh year dropdowns LAST
+    // Refresh year dropdowns
     refreshYearDropdowns();
 }
 
 // =============================================================================
 // ## VISUALIZATION RENDERING
 // =============================================================================
-// Renders interactive Plotly time series chart
+// Renders interactive D3 time series chart
 function renderChart(data, province, energyVar) {
-    // Clear container FIRST, no early message
+    // Clear container FIRST
     chartContainer.innerHTML = '';
+
     if (!data || data.length === 0) {
         chartContainer.innerHTML = '<p>No data available for the selected parameters.</p>';
         return;
     }
-    
-    const energyVarLabel = ENERGY_VARS[province].find(v => v.value === energyVar)?.label || energyVar;
-    
-    // Prepare data for Plotly
-    const xData = data.map(row => row.DATETIME_LOCAL || row.TIME_PERIOD);
-    const yData = data.map(row => parseFloat(row.OBS_VALUE.replace(/,/g, '')));
-    
-    const trace = {
-    x: xData,
-    y: yData,
-    type: 'scatter',
-    mode: 'lines',
-    name: energyVarLabel,
-    line: { color: '#036BDB', width: 2 },
-    hoverlabel: {
-        bgcolor: '#036BDB',   // same as line.color
-        bordercolor: '#333',
-        font: { color: '#ffffff' }
-    },
-    hovertemplate:
-        '<b>%{fullData.name}</b><br>' +
-        'Observation value: %{y}<br>' +
-        'Date and time: %{x}' +
-        '<extra></extra>'
-    };
-    
-    const layout = {
-        title: `${energyVarLabel} in ${province}`,
-        xaxis: {
-            title: 'Date and time',
-            tickformat: '%Y-%m-%d<br>%H:%M'
-        },
-        yaxis: {
-            title: getYAxisLabel(province, energyVar)
-        },
-        hovermode: 'closest'
-    };
-    
-    const config = {
-        responsive: true,
-        displayModeBar: false,
-    };
-    
-    Plotly.newPlot('chart-container', [trace], layout, config);
+
+    const energyVarLabel =
+        (ENERGY_VARS[province] || []).find(v => v.value === energyVar)?.label || energyVar;
+
+    // Prepare data for D3: parse date + numeric value
+    const parsedData = data
+        .map(row => {
+            const dateStr = row.DATETIME_LOCAL || row.TIME_PERIOD;
+            const rawVal = (row.OBS_VALUE || '').replace(/,/g, '').trim(); // strip thousands + padding
+            const value = rawVal === '' ? null : Number(rawVal);
+            const date = dateStr ? new Date(dateStr) : null;
+
+            if (!date || value == null || Number.isNaN(value)) return null;
+            return { date, value };
+        })
+        .filter(d => d !== null);
+
+    if (!parsedData.length) {
+        chartContainer.innerHTML = '<p>No data available for the selected parameters.</p>';
+        return;
+    }
+
+    // Dimensions
+    const margin = { top: 40, right: 40, bottom: 100, left: 70 };
+    const containerWidth = chartContainer.clientWidth || 800;
+    const containerHeight = chartContainer.clientHeight || 400;
+    const width = containerWidth - margin.left - margin.right;
+    const height = containerHeight - margin.top - margin.bottom;
+
+    // Create SVG with viewBox for responsiveness
+    const svg = d3.select(chartContainer)
+        .append('svg')
+        .attr('width', containerWidth)
+        .attr('height', containerHeight)
+        .attr('viewBox', `0 0 ${containerWidth} ${containerHeight}`)
+        .attr('preserveAspectRatio', 'xMidYMid meet');
+
+    const g = svg.append('g')
+        .attr('transform', `translate(${margin.left},${margin.top})`);
+
+    // Scales
+    const x = d3.scaleTime()
+        .domain(d3.extent(parsedData, d => d.date))
+        .range([0, width]);
+
+    const y = d3.scaleLinear()
+        .domain(d3.extent(parsedData, d => d.value))
+        .nice()
+        .range([height, 0]);
+
+    // Axes
+    const xAxis = d3.axisBottom(x)
+        .ticks(6)
+        .tickFormat(d3.timeFormat('%Y-%m-%d %H:%M'));
+
+    const yAxis = d3.axisLeft(y)
+        .ticks(6);
+
+    g.append('g')
+        .attr('transform', `translate(0,${height})`)
+        .call(xAxis)
+        .selectAll('text')
+        .style('text-anchor', 'middle');
+
+    g.append('g')
+        .call(yAxis);
+
+    // Axis labels
+    g.append('text')
+        .attr('x', width / 2)
+        .attr('y', height + 45)
+        .attr('text-anchor', 'middle')
+        .attr('fill', '#333')
+        .text('Date and time');
+
+    g.append('text')
+        .attr('transform', 'rotate(-90)')
+        .attr('x', -height / 2)
+        .attr('y', -50)
+        .attr('text-anchor', 'middle')
+        .attr('fill', '#333')
+        .text(getYAxisLabel(province, energyVar)); 
+
+    // Line generator
+    const line = d3.line()
+        .x(d => x(d.date))
+        .y(d => y(d.value));
+
+    // Line path
+    g.append('path')
+        .datum(parsedData)
+        .attr('fill', 'none')
+        .attr('stroke', '#036BDB')
+        .attr('stroke-width', 2)
+        .attr('d', line);
+
+    // Simple tooltip
+    let tooltip = d3.select('.hfed-tooltip');
+    if (tooltip.empty()) {
+        tooltip = d3.select('body')
+            .append('div')
+            .attr('class', 'hfed-tooltip')
+            .style('position', 'absolute')
+            .style('pointer-events', 'none')
+            .style('background', '#036BDB')
+            .style('color', '#fff')
+            .style('padding', '6px 10px')
+            .style('border-radius', '4px')
+            .style('font-size', '12px')
+            .style('box-shadow', '0 2px 4px rgba(0,0,0,0.2)')
+            .style('display', 'none');
+    }
+
+    const formatDateTime = d3.timeFormat('%Y-%m-%d %H:%M');
+
+    // Hover circles for tooltip
+    g.selectAll('.hfed-point')
+        .data(parsedData)
+        .enter()
+        .append('circle')
+        .attr('class', 'hfed-point')
+        .attr('cx', d => x(d.date))
+        .attr('cy', d => y(d.value))
+        .attr('r', 3)
+        .attr('fill', '#036BDB')
+        .attr('opacity', 0)
+        .on('mouseover', (event, d) => {
+            tooltip
+                .style('display', 'block')
+                .html(
+                    `<strong>${energyVarLabel}</strong><br>` +
+                    `Observation value: ${d.value}<br>` +
+                    `Date and time: ${formatDateTime(d.date)}`
+                );
+        })
+        .on('mousemove', (event) => {
+            tooltip
+                .style('left', (event.pageX + 12) + 'px')
+                .style('top', (event.pageY - 24) + 'px');
+        })
+        .on('mouseout', () => {
+            tooltip.style('display', 'none');
+        });
+
+    // Title
+    svg.append('text')
+        .attr('x', containerWidth / 2)
+        .attr('y', 20)
+        .attr('text-anchor', 'middle')
+        .attr('fill', '#333')
+        .style('font-size', '16px')
+        .style('font-weight', '600')
+        .text(`${energyVarLabel} in ${province}`);
 }
 
 // Get Y-axis label
@@ -980,7 +1092,7 @@ function renderTablePage() {
 
     tableContainer.innerHTML = html;
 
-    // Attach events
+    // Events for buttons
     tableContainer.querySelectorAll('.pagination a').forEach(link => {
         link.addEventListener('click', (e) => {
             e.preventDefault();

@@ -8,7 +8,7 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link rel="stylesheet" href="styles.css">
-    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <script src="https://www.statcan.gc.ca/Framework/js/d3.v7.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.js"></script>
 </head>
 <body>
@@ -30,21 +30,15 @@
                 </select>
             </div>
 
-
-
             <div class="control-group">
                 <label for="energy-var-select">Energy variable</label>
                 <select id="energy-var-select" class="form-control"></select>
             </div>
 
-
-
             <div class="control-group" id="counterpart-area-group" style="display: none;">
                 <label for="counterpart-area-select">Counterpart area</label>
                 <select id="counterpart-area-select" class="form-control"></select>
             </div>
-
-
 
             <div class="control-group">
                 <label for="start-date">Start date</label>
@@ -54,8 +48,6 @@
                 </div>
             </div>
 
-
-
             <div class="control-group">
                 <label for="end-date">End date</label>
                 <div class="flatpickr-wrapper" id="end-date-wrapper">
@@ -64,15 +56,11 @@
                 </div>
             </div>
 
-
-
             <div class="control-group">
                 <button id="update-btn" class="btn btn-primary">
                     <i class="fa-solid fa-rotate"></i> Update date range
                 </button>
             </div>
-
-
 
             <div class="control-group">
                 <button id="download-btn" class="btn btn-primary">
@@ -101,7 +89,6 @@
             </div>
         </div>
     </div>
-
 
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.1/js/bootstrap.min.js"></script>
